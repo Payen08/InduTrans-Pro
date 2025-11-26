@@ -1,0 +1,5 @@
+{
+  "name": "InduTrans Pro",
+  "description": "A professional industrial translation tool for batch translating technical terms into English, Vietnamese, and literal meanings with Excel export capabilities.",
+  "requestFramePermissions": []
+}

@@ -2,8 +2,6 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { TranslationResult } from "../types";
 import { SYSTEM_INSTRUCTION, SUPPORTED_LANGUAGES } from "../constants";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 // Helper to remove trailing periods
 const cleanText = (text: string) => {
   if (!text) return "";
@@ -17,9 +15,6 @@ const buildSchema = (targetLanguages: string[]): Schema => {
   const required = ["original"];
 
   targetLanguages.forEach(code => {
-    // Sanitize code for key (remove hyphen for schema property if needed, but 'zh-TW' needs to be handled)
-    // Actually Google GenAI Schema properties can have hyphens if quoted? 
-    // Safest to use the exact code and map it later.
     properties[code] = { type: Type.STRING, description: `Translation for ${code}` };
     required.push(code);
   });
@@ -34,8 +29,32 @@ const buildSchema = (targetLanguages: string[]): Schema => {
   };
 };
 
+const getApiKey = (): string => {
+  // 1. 尝试从 Vite 环境变量获取
+  if (import.meta.env.VITE_GEMINI_API_KEY) {
+    return import.meta.env.VITE_GEMINI_API_KEY;
+  }
+  // 2. 尝试从 localStorage 获取
+  const storedKey = localStorage.getItem('gemini_api_key');
+  if (storedKey) {
+    return storedKey;
+  }
+  // 3. 尝试从旧的 process.env 获取 (兼容性)
+  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+    return process.env.API_KEY;
+  }
+  return "";
+};
+
 export const translateBatch = async (texts: string[], targetLanguages: string[]): Promise<TranslationResult[]> => {
   if (texts.length === 0) return [];
+
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    throw new Error("未配置 Gemini API 密钥。请在设置中配置或检查环境变量。");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
 
   const languagesListText = targetLanguages.map(code => {
     const lang = SUPPORTED_LANGUAGES.find(l => l.code === code);
@@ -44,7 +63,7 @@ export const translateBatch = async (texts: string[], targetLanguages: string[])
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-2.0-flash', // 更新为更稳定的模型名称，或者保持 gemini-1.5-flash
       contents: [
         {
           role: 'user',
@@ -63,7 +82,7 @@ export const translateBatch = async (texts: string[], targetLanguages: string[])
       },
     });
 
-    const rawJson = response.text;
+    const rawJson = response.text; // response.text 是一个 getter
     if (!rawJson) {
       throw new Error("No response text received from Gemini.");
     }
@@ -89,3 +108,4 @@ export const translateBatch = async (texts: string[], targetLanguages: string[])
     throw error;
   }
 };
+
